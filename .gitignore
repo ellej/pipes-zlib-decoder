@@ -1,5 +1,8 @@
 dist
+dist-newstyle
 cabal-dev
+cabal.project*
+.ghc.environment.*
 *.o
 *.hi
 *.chi
