@@ -1,0 +1,39 @@
+
+name: pipes-zlib-decoder
+version: 1.0.0
+synopsis: Pipe that decodes a zlib stream.
+license: BSD3
+license-file: LICENSE
+author: Jelle Lingier
+maintainer: Jelle Lingier <jelle.lingier@gmail.com>
+category: Codec, Pipes
+build-type: Simple
+cabal-version: >=1.10
+
+library
+   exposed-modules: Pipes.Decode.Zlib
+   default-extensions: Rank2Types, LambdaCase, TupleSections
+   build-depends: base >=4.6,
+                  pipes >=4.1,
+                  containers >=0.5,
+                  mtl >=2.1
+   hs-source-dirs: src
+   default-language: Haskell2010
+   ghc-options: -Wall -O2 -funbox-strict-fields -fwarn-tabs
+
+test-suite zlib-tests
+   type: exitcode-stdio-1.0
+   main-is: Main.hs
+   other-modules:
+   ghc-options: -w -threaded -rtsopts -with-rtsopts=-N -fno-warn-orphans
+   hs-source-dirs: testsuite
+   build-depends: base,
+                  pipes-zlib-decoder,
+                  zlib >=0.5.4,
+                  bytestring >=0.10,
+                  transformers >=0.3,
+                  pipes >=4.0,
+                  tasty >=0.7,
+                  tasty-hunit >=0.4,
+                  tasty-quickcheck >=0.3
+   default-language: Haskell2010
