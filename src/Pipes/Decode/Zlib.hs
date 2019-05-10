@@ -2,12 +2,10 @@
 module Pipes.Decode.Zlib (zlibDecode) where
 
 import Prelude hiding (foldr, mapM_)
-import Control.Applicative
 import Control.Monad hiding (mapM_)
 import Data.Bits (Bits, testBit, (.&.), setBit, clearBit, shiftL)
 import Data.Foldable (foldr, mapM_)
 import Data.List (mapAccumL)
-import Data.Monoid
 import Data.Sequence (Seq, (|>))
 import Data.Word (Word8, Word32)
 import Pipes
