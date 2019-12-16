@@ -1,0 +1,3 @@
+= Zlib decoder pipe
+
+Pipe of type `Monad m => Pipe Word8 Word8 m ()` for decoding a zlib stream.

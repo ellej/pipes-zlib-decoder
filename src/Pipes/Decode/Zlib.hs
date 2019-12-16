@@ -31,7 +31,7 @@ emptyZState = ZState mempty 1 0 []
 
 zAddBT :: Word8 -> ZState -> ZState
 zAddBT w (ZState bt s1 s2 c) = ZState app s1' s2' c where
-   app = (S.drop (S.length bt - 32768) (bt |> w))
+   app = S.drop (S.length bt - 32768) (bt |> w)
    s1' = (s1 + fromIntegral w) `mod` 65521
    s2' = (s2 + s1') `mod` 65521
 
@@ -70,7 +70,7 @@ zlibDecode = evalStateP emptyZState z where
    loop = do
       lastBlock <- getBit
       infBlockType >>= infMethod
-      when (not lastBlock) loop
+      unless lastBlock loop
 
 -- Zlib header parser.
 zlibHeader :: Z ()
@@ -162,7 +162,7 @@ buildHuffTree = fst . build 0 . cleanup where
       | otherwise = error "buildHuffTree: this should never happen"
 
 walkTree :: Tree -> Z Word32
-walkTree tree = walk tree where
+walkTree = walk where
    walk Null = fail "got null tree"
    walk (Node l r) = getBit >>= walk . bool r l
    walk (Leaf w) = return w
@@ -224,7 +224,7 @@ bytesToIntL = bytesToNumL
 
 -- Convert words to a number. Least significant byte first.
 bytesToNumL :: (Integral a, Bits a) => [Word8] -> a
-bytesToNumL = foldr (\x r -> (shiftL r 8) + fromIntegral x) 0
+bytesToNumL = foldr (\x r -> shiftL r 8 + fromIntegral x) 0
 
 -- Convert words to a number. Most significant byte first.
 bytesToNumM :: (Integral a, Bits a) => [Word8] -> a
