@@ -3,6 +3,7 @@ module Pipes.Decode.Zlib (zlibDecode) where
 
 import Prelude hiding (foldr, mapM_)
 import Control.Monad hiding (mapM_)
+import Control.Monad.Fail
 import Data.Bits (Bits, testBit, (.&.), setBit, clearBit, shiftL)
 import Data.Foldable (foldr, mapM_)
 import Data.List (mapAccumL)
@@ -24,7 +25,7 @@ data ZState = ZState {
 
 type IOut = Seq Word8
 data Tree = Node Tree Tree | Leaf Word32 | Null
-type Z r = forall m. Monad m => Pipe Word8 Word8 (ST.StateT ZState m) r
+type Z r = forall m. MonadFail m => Pipe Word8 Word8 (ST.StateT ZState m) r
 
 emptyZState :: ZState
 emptyZState = ZState mempty 1 0 []
@@ -64,7 +65,7 @@ getBit = current <$> stGet >>= \case
    b:bs -> b <$ cPut bs
 
 -- Pipe to decode a zlib stream.
-zlibDecode :: Monad m => Pipe Word8 Word8 m ()
+zlibDecode :: MonadFail m => Pipe Word8 Word8 m ()
 zlibDecode = evalStateP emptyZState z where
    z = zlibHeader >> loop >> zlibAdler32
    loop = do
