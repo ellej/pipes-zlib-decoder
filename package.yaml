@@ -25,6 +25,7 @@ default-extensions:
 - Rank2Types
 - LambdaCase
 - TupleSections
+- FlexibleContexts
 
 library:
   source-dirs: src
