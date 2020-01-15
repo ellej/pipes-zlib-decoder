@@ -1,4 +1,6 @@
-.stack-work/
-
 .history/
-*.code-workspace
+pipes-zlib-decoder.code-workspace
+
+dist/
+dist-newstyle/
+.ghc.environment.*
