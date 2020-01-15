@@ -2,6 +2,7 @@
 module Main where
 
 import Pipes
+import Pipes.Lift (runExceptP)
 import qualified Pipes.Prelude as P
 
 import Data.Functor.Identity (Identity, runIdentity)
@@ -16,13 +17,13 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as CL
 
 main :: IO ()
-main = defaultMain $ localOption (QuickCheckTests 1000) $ zlibTestGroup
+main = defaultMain $ localOption (QuickCheckTests 1000) zlibTestGroup
 
 instance Arbitrary CL.ByteString where
     arbitrary   = fmap CL.pack arbitrary
 
 runTest :: BL.ByteString -> CL.ByteString
-runTest text = BL.pack $ runIdentity $ P.toListM (each (BL.unpack text) >-> PZ.zlibDecode)
+runTest text = BL.pack $ runIdentity $ P.toListM (each (BL.unpack text) >-> (() <$ runExceptP PZ.zlibDecode))
 
 zlibQC :: CL.ByteString -> Bool
 zlibQC s = runTest (Z.compress s) == s

@@ -3,6 +3,7 @@ module Pipes.Decode.Zlib (zlibDecode) where
 
 import Prelude hiding (foldr, mapM_)
 import Control.Monad hiding (mapM_)
+import Control.Monad.Except
 import Data.Bits (Bits, testBit, (.&.), setBit, clearBit, shiftL)
 import Data.Foldable (foldr, mapM_)
 import Data.List (mapAccumL)
@@ -24,7 +25,7 @@ data ZState = ZState {
 
 type IOut = Seq Word8
 data Tree = Node Tree Tree | Leaf Word32 | Null
-type Z r = forall m. Monad m => Pipe Word8 Word8 (ST.StateT ZState m) r
+type Z r = forall m. MonadError String m => Pipe Word8 Word8 (ST.StateT ZState m) r
 
 emptyZState :: ZState
 emptyZState = ZState mempty 1 0 []
@@ -64,7 +65,7 @@ getBit = current <$> stGet >>= \case
    b:bs -> b <$ cPut bs
 
 -- Pipe to decode a zlib stream.
-zlibDecode :: Monad m => Pipe Word8 Word8 m ()
+zlibDecode :: MonadError String m => Pipe Word8 Word8 m ()
 zlibDecode = evalStateP emptyZState z where
    z = zlibHeader >> loop >> zlibAdler32
    loop = do
@@ -76,19 +77,18 @@ zlibDecode = evalStateP emptyZState z where
 zlibHeader :: Z ()
 zlibHeader = getBytes 2 >>= inner where
    inner [b1, b2]
-      | b1 .&. 15 /= 8 = fail "unknown compression method"
-      | testBit b2 5 = fail "dict not supported"
-      | mod (asInt b1 * 256 + asInt b2) 31 /= 0 = fail "FCHECK is not 0"
+      | b1 .&. 15 /= 8 = throwError "unknown compression method"
+      | testBit b2 5 = throwError "dict not supported"
+      | mod (asInt b1 * 256 + asInt b2) 31 /= 0 = throwError "FCHECK is not 0"
       | otherwise = return ()
-   inner _ = fail "zlibHeader: getBytes 2 did not return 2 bytes"
+   inner _ = throwError "zlibHeader: getBytes 2 did not return 2 bytes"
 
 -- Adler32 checksum.
 zlibAdler32 :: Z ()
 zlibAdler32 = do
    c1 <- liftM2 ((+) . (*) 65536) adlerS2 adlerS1 <$> stGet
    c2 <- bytesToNumM <$> getBytes 4
-   when (c1 /= c2) (fail $ "adler32 checksum failed (calc: "
-      ++ show c1 ++ ", from data: " ++ show c2 ++ ")")
+   when (c1 /= c2) (throwError $ "adler32 checksum failed (calc: " ++ show c1 ++ ", from data: " ++ show c2 ++ ")")
 
 
 infBlockType :: Z Int
@@ -100,7 +100,7 @@ infMethod i = case i of
    0 -> infNoCompression
    1 -> infFixedHuffman
    2 -> infDynamicHuffman
-   a -> fail ("got invalid block type (" <> show a <> ")")
+   a -> throwError ("got invalid block type (" <> show a <> ")")
 
 -- Inflate uncompressed stream.
 infNoCompression :: Z ()
@@ -111,8 +111,7 @@ infNoCompression = do
 
 fixedHuffTree :: (Tree, Tree)
 fixedHuffTree = (ltree, dtree) where
-   ltree = buildHuffTree (join
-      [getCs 8 [0..143], getCs 9 [144..255], getCs 7 [256..279], getCs 8 [280..287]])
+   ltree = buildHuffTree (join [getCs 8 [0..143], getCs 9 [144..255], getCs 7 [256..279], getCs 8 [280..287]])
    dtree = buildHuffTree (getCs 5 [0..29])
    getCs l cs = (l,) <$> cs
 
@@ -130,7 +129,7 @@ buildDynamicTree = do
    hdist <- bitsToInt <$> getBits 5
    hclen <- (+4) . bitsToInt <$> getBits 4
    hclengths <- replicateM hclen (bitsToInt <$> getBits 3)
-   let tree = buildHuffTree (L.zip hclengths [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15])
+   let tree = buildHuffTree (L.zip hclengths [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15])
    distlit <- buildHuffCodes tree (hlit + hdist + 258)
    let lit = zip (take (hlit + 257) distlit) [0..]
        dist = zip (drop (hlit + 257) distlit) [0..]
@@ -138,7 +137,7 @@ buildDynamicTree = do
 
 buildHuffCodes :: Tree -> Int -> Z [Int]
 buildHuffCodes tree = build 0 where
-   build _ i | i < 0 = fail "got negative code count"
+   build _ i | i < 0 = throwError "got negative code count"
    build _ 0 = return []
    build prev i = walkTree tree >>= inner . fromIntegral where
       inner w
@@ -146,7 +145,7 @@ buildHuffCodes tree = build 0 where
          | w == 16 = nextMult 3 2 >>= repVal prev
          | w == 17 = nextMult 3 3 >>= repVal 0
          | w == 18 = nextMult 11 7 >>= repVal 0
-         | otherwise = fail "got illegal huffman alphabet code"
+         | otherwise = throwError "got illegal huffman alphabet code"
       nextMult offset bits = (+offset) . bitsToInt <$> getBits bits
       repVal val cnt = (replicate cnt val ++) <$> build val (i - cnt)
 
@@ -163,7 +162,7 @@ buildHuffTree = fst . build 0 . cleanup where
 
 walkTree :: Tree -> Z Word32
 walkTree = walk where
-   walk Null = fail "got null tree"
+   walk Null = throwError "got null tree"
    walk (Node l r) = getBit >>= walk . bool r l
    walk (Leaf w) = return w
 
@@ -187,12 +186,12 @@ infBackTrack dTree w = do
    bLen <- zLookup lengths w
    bDist <- walkTree dTree >>= zLookup dists
    if S.length bt == 0
-      then fail "tried to backtrack, but found no history"
+      then throwError "tried to backtrack, but found no history"
       else mapM_ oAdd (takeCycle bLen (S.drop (S.length bt - bDist) bt))
 
 zLookup :: [(Word32, (Int, Int))] -> Word32 -> Z Int
 zLookup list w = case L.lookup w list of
-   Nothing -> fail "backtrack failed: could not find length or distance"
+   Nothing -> throwError "backtrack failed: could not find length or distance"
    Just (val, len) -> (val+) . bitsToInt <$> getBits len
 
 -- Take n elements from a Seq, cycling the sequence if n is larger than the length of the Seq.
